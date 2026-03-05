@@ -182,4 +182,6 @@ python LSTM_model.py
 
 ## License
 
-This project has been done as part of the **Revolut** challenge during **HackUPC 2025** hackathon by Murad Hüseynov and Giorgia Barboni.
+MIT License — see [LICENSE](./LICENSE).
+
+This project was built as part of the **Revolut** challenge during **HackUPC 2025** hackathon by Murad Hüseynov and Giorgia Barboni.
