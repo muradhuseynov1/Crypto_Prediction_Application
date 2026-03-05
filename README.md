@@ -1,133 +1,185 @@
-# Crypto Prediction App  
+# CryptoPredict
 
-A web application for cryptocurrency price prediction, market analysis, and interactive quizzes. This project combines advanced AI technologies like **LSTM models**, **FinBERT for sentiment analysis**, and real-time market data APIs.  
-
-![Crypto Banner](https://via.placeholder.com/1200x400?text=Crypto+Prediction+App)  
+AI-powered cryptocurrency analysis platform that combines **LSTM neural networks**, **FinBERT sentiment analysis**, and **real-time market data** to predict crypto price movements and let users test their market intuition.
 
 ---
 
-## Features  
+## Features
 
-- **Real-time cryptocurrency charts** with technical indicators like MACD.  
-- **Gamified prediction quizzes** with a leaderboard to test your market intuition.  
-- **AI-powered news sentiment analysis** using FinBERT to assess market trends.  
-- **Responsive design** for seamless use across devices.  
-
----
-
-## Demo  
-
-👉 [**Live Demo**](https://example.com)  
+- **Real-Time Dashboard** — Live OHLC charts with MACD indicators and sparklines for BTC, ETH, BNB, XRP & SOL
+- **AI Price Prediction** — LSTM model trained on news sentiment and technical indicators to predict 60-minute price returns
+- **FinBERT Sentiment Analysis** — Automatic sentiment scoring of crypto news headlines using a fine-tuned BERT model
+- **Prediction Game** — Interactive click-to-predict game where users guess future prices and earn accuracy-based points
+- **Leaderboard** — Compete with other players and track prediction accuracy rankings
+- **Live News Feed** — Real-time cryptocurrency news with auto-rotation
 
 ---
 
-## Technologies  
+## Tech Stack
 
-- **Python** and **Flask** for backend development.  
-- **React.js** for frontend UI.  
-- **LSTM (Long Short-Term Memory)** models for price prediction.  
-- **FinBERT** for sentiment analysis on cryptocurrency news.  
-- **Binance API** for real-time market data.  
-- **NewsAPI** for fetching cryptocurrency-related news.  
+| Layer | Technology |
+|-------|-----------|
+| **Frontend** | React 19, Material UI 7, Recharts, Axios |
+| **Backend** | Python, Flask, SQLAlchemy, Flask-CORS |
+| **ML/AI** | PyTorch LSTM, FinBERT (HuggingFace), Scikit-learn GBR |
+| **APIs** | Binance API (market data), NewsAPI (news) |
+| **Database** | SQLite |
 
 ---
 
-## Installation  
+## Project Structure
 
-### Prerequisites  
-
-Make sure you have the following installed:  
-
-- **Python 3.8+**  
-- **Node.js 14+**  
-- **npm** or **yarn**  
-
-### 1. Clone the Repository  
-```bash
-git clone https://github.com/muradhuseynov1/db.git
-cd db
+```
+Crypto_Prediction_Application/
+├── app/                          # Flask backend
+│   ├── __init__.py               # App factory with dotenv loading
+│   ├── models.py                 # SQLAlchemy models (User, Prediction)
+│   ├── routes.py                 # API endpoints
+│   └── utils.py                  # LSTM model loading, Binance/NewsAPI clients
+├── frontend/                     # React frontend
+│   └── src/
+│       ├── components/           # UI components
+│       │   ├── Charts.js         # Main dashboard with charts & market data
+│       │   ├── Home.js           # Landing page
+│       │   ├── Login.js          # Authentication
+│       │   ├── Register.js       # User registration
+│       │   ├── QuizPage.js       # Interactive prediction game
+│       │   ├── Leaderboard.js    # Points ranking
+│       │   └── Navbar.js         # Navigation bar
+│       ├── context/              # React context (auth state)
+│       ├── utils/                # Client-side utilities
+│       └── theme.js              # Shared MUI dark theme
+├── scripts/                      # Data pipeline scripts
+│   ├── build_dataset.py          # Fetch news + OHLC data from APIs
+│   ├── csv_preprocess.py         # Feature engineering
+│   ├── data_split.py             # Train GBR model
+│   └── sentiment_scores.py       # FinBERT sentiment analysis
+├── LSTM_model.py                 # LSTM model definition + training
+├── run.py                        # Backend entry point
+├── requirements.txt              # Python dependencies
+└── .env.example                  # API key template
 ```
 
-### 2.  Backend Setup (Flask)
-```python
-# Create and activate a virtual environment
-python -m venv .venv
-source .venv/bin/activate  # On Windows, use: .venv\Scripts\activate
+---
 
+## Prerequisites
+
+- **Python 3.8+**
+- **Node.js 16+** and **npm**
+- API keys for [Binance](https://www.binance.com/en/my/settings/api-management) and [NewsAPI](https://newsapi.org/)
+
+---
+
+## Installation
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/muradhuseynov1/Crypto_Prediction_Application.git
+cd Crypto_Prediction_Application
+```
+
+### 2. Backend Setup
+
+```bash
+# Create virtual environment
+python -m venv .venv
+
+# Activate it
+# Windows:
+.venv\Scripts\activate
+# macOS/Linux:
+source .venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
 
 # Set up environment variables
 cp .env.example .env
-# Add your API keys in the .env file
+# Edit .env with your actual API keys
 ```
 
-### 3.  Frontend Setup (React)
+### 3. Frontend Setup
+
 ```bash
 cd frontend
 npm install
+cd ..
 ```
+
+---
 
 ## Running the Application
 
-### Start the Backend
+Open **two terminals**:
+
+**Terminal 1 — Backend:**
 ```bash
-python app/__init__.py
+python run.py
 ```
-### Start the Frontend
+Backend runs at `http://localhost:5000`
+
+**Terminal 2 — Frontend:**
 ```bash
-cd frontend 
+cd frontend
 npm start
 ```
+Frontend runs at `http://localhost:3000`
 
-The app will be available at: `http://localhost:3000`
+---
 
 ## API Keys
-To fully utilize the app, make sure to set up the following API keys in your `.env` file:
 
-- NewsAPI (https://newsapi.org/)
-- Binance (https://www.binance.com/)
-- 
-Example `.env` file:
+Create a `.env` file in the project root (use `.env.example` as template):
 
 ```env
-NEWSAPI_KEY=your_newsapi_key
 BINANCE_API_KEY=your_binance_api_key
 BINANCE_API_SECRET=your_binance_api_secret
+NEWSAPI_KEY=your_newsapi_key
+COINLAYER_API_KEY=your_coinlayer_api_key
 ```
 
-## Project Structure
-```Code
-crypto-prediction-app/
-├── app/                    # Backend (Flask)
-│   ├── __init__.py         # Flask app entry-point
-│   ├── models.py           # Database models
-│   ├── routes.py           # API routes
-│   └── utils.py            # Helper functions
-├── frontend/               # Frontend (React)
-│   ├── src/
-│   │   ├── components/     # UI components
-│   │   ├── pages/          # Page components
-│   │   └── App.js          # Main app file
-├── requirements.txt        # Python dependencies
-└── README.md               # Project documentation
+> See [API_KEYS_GUIDE.md](./API_KEYS_GUIDE.md) for detailed instructions on obtaining keys and storing them securely.
+
+---
+
+## Data Pipeline
+
+The ML models were trained on a custom dataset built from crypto news and price data. To rebuild from scratch:
+
+```bash
+# 1. Collect news + OHLC data
+python scripts/build_dataset.py
+
+# 2. Add FinBERT sentiment scores
+python scripts/sentiment_scores.py
+
+# 3. Engineer technical features
+python scripts/csv_preprocess.py
+
+# 4. Train GBR model
+python scripts/data_split.py
+
+# 5. Train LSTM model
+python LSTM_model.py
 ```
 
-## Contributing
-Contributions are welcome!
+---
 
-1. Fork the repository.
-2. Create a branch for your feature:
-```bash
-git checkout -b feature/your-feature-name
-```
-3. Commit your changes:
-```bash
-git commit -m "Add your feature description"
-```
-4. Push to your branch:
-```bash
-git push origin feature/your-feature-name
-```
-5. Open a Pull Request and describe your changes.
+## API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/register` | Register a new user |
+| `POST` | `/api/login` | Authenticate user |
+| `POST` | `/api/predict` | Submit a price prediction |
+| `GET` | `/api/leaderboard` | Get top 10 players |
+| `GET` | `/api/charts/<symbol>` | Historical OHLC + MACD data |
+| `GET` | `/api/market-overview` | 24h price changes for all coins |
+| `GET` | `/api/news` | Latest crypto news |
+
+---
+
+## License
+
+This project is for educational and portfolio purposes.

@@ -1,12 +1,22 @@
+"""Data Collection Script
+
+Fetches cryptocurrency news and OHLC price data to build the training dataset.
+Requires API keys set in the .env file: NEWSAPI_KEY, COINLAYER_API_KEY, BINANCE_API_KEY.
+
+Usage:
+    python scripts/build_dataset.py
+"""
+import os
 import requests
 import pandas as pd
 from datetime import datetime, timedelta
 import time
+from dotenv import load_dotenv
 
-# --- CONFIG ---
-NEWSAPI_KEY = '78a444efa04c4a5cb28e653b6c57f67b'
-COINLAYER_API_KEY = '0b55e8699e1af819a9db81647a605ab8'
-BINANCE_API_KEY = 'bC2PE67Aowu2F6vqFnzi0sPvuh1sPEd9c0ZUUMbEe5ZDFbMhfTXrtUGD1Y7gSWrs'
+load_dotenv()
+
+NEWSAPI_KEY = os.getenv('NEWSAPI_KEY')
+COINLAYER_API_KEY = os.getenv('COINLAYER_API_KEY')
 CRYPTO_SYMBOLS = ['BTC', 'ETH', 'BNB', 'XRP', 'SOL']
 TARGET_CURRENCY = 'USD'
 
@@ -26,6 +36,7 @@ COIN_KEYWORDS = {
     'SOL': ['solana', 'sol']
 }
 
+
 def fetch_news_by_date(date_str):
     url = "https://newsapi.org/v2/everything"
     params = {
@@ -43,10 +54,11 @@ def fetch_news_by_date(date_str):
     print(f"News fetch error ({date_str}):", response.json())
     return []
 
-def fetch_historical_price(date, symbols, target_currency, access_key):
+
+def fetch_historical_price(date, symbols, target_currency):
     url = f"https://api.coinlayer.com/{date}"
     params = {
-        'access_key': access_key,
+        'access_key': COINLAYER_API_KEY,
         'symbols': ','.join(symbols),
         'target': target_currency
     }
@@ -58,6 +70,7 @@ def fetch_historical_price(date, symbols, target_currency, access_key):
         print(f"Price fetch error ({date}):", data.get('error'))
         return None
 
+
 def detect_coins_from_title(title):
     title = title.lower()
     matched_coins = []
@@ -66,8 +79,9 @@ def detect_coins_from_title(title):
             matched_coins.append(symbol)
     return matched_coins
 
+
 def fetch_binance_ohlc(symbol, timestamp):
-    start_time = int(timestamp.timestamp() // 3600 * 3600 * 1000)  # beginning of the hour
+    start_time = int(timestamp.timestamp() // 3600 * 3600 * 1000)
     end_time = start_time + 3600 * 1000
     url = "https://api.binance.com/api/v3/klines"
     params = {
@@ -88,6 +102,7 @@ def fetch_binance_ohlc(symbol, timestamp):
         }
     return None
 
+
 def build_dataset(start_date, end_date):
     current_date = start_date
     final_data = []
@@ -97,7 +112,7 @@ def build_dataset(start_date, end_date):
         print(f"Processing {date_str}...")
 
         news_items = fetch_news_by_date(date_str)
-        prices = fetch_historical_price(date_str, CRYPTO_SYMBOLS, TARGET_CURRENCY, COINLAYER_API_KEY)
+        prices = fetch_historical_price(date_str, CRYPTO_SYMBOLS, TARGET_CURRENCY)
 
         if prices is None:
             current_date += timedelta(days=1)
@@ -132,12 +147,13 @@ def build_dataset(start_date, end_date):
                     'low': ohlc['low'],
                     'close': ohlc['close']
                 })
-                time.sleep(0.25)  # Avoid Binance rate limit
+                time.sleep(0.25)
 
         current_date += timedelta(days=1)
         time.sleep(1)
 
     return pd.DataFrame(final_data)
+
 
 if __name__ == '__main__':
     start = datetime.strptime('2025-03-20', '%Y-%m-%d')
@@ -148,6 +164,6 @@ if __name__ == '__main__':
     if not df.empty:
         df = df.sort_values(by='timestamp')
         df.to_csv('crypto_news_price_ohlc_dataset.csv', index=False)
-        print("✅ Saved to crypto_news_price_ohlc_dataset.csv")
+        print("Saved to crypto_news_price_ohlc_dataset.csv")
     else:
-        print("⚠️ No data collected.")
+        print("No data collected.")

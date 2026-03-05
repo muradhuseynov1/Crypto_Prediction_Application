@@ -1,2 +1,33 @@
-.venv
-frontend/node_modules
+# Environment
+.env
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Node
+node_modules/
+frontend/node_modules/
+frontend/build/
+
+# Database
+instance/
+*.db
+
+# Model artifacts
+*.pt
+*.pkl
+
+# Data files
+*.csv
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
