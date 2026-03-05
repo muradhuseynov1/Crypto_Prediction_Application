@@ -182,4 +182,4 @@ python LSTM_model.py
 
 ## License
 
-This project is for educational and portfolio purposes.
+This project has been done as part of the **Revolut** challenge during **HackUPC 2025** hackathon by Murad Hüseynov and Giorgia Barboni.
