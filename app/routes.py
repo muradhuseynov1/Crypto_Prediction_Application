@@ -23,7 +23,11 @@ def register():
     db.session.add(user)
     db.session.commit()
 
-    return jsonify({'message': 'User registered successfully', 'user_id': user.id}), 201
+    return jsonify({
+        'message': 'User registered successfully',
+        'user_id': user.id,
+        'username': user.username
+    }), 201
 
 
 @main_bp.route('/api/login', methods=['POST'])
@@ -36,7 +40,11 @@ def login():
     if not user:
         return jsonify({'error': 'Invalid credentials'}), 401
 
-    return jsonify({'message': 'Login successful', 'user_id': user.id}), 200
+    return jsonify({
+        'message': 'Login successful',
+        'user_id': user.id,
+        'username': user.username
+    }), 200
 
 
 @main_bp.route('/api/predict', methods=['POST'])
@@ -45,7 +53,10 @@ def predict():
     user_id = data.get('user_id')
     crypto_symbol = data.get('crypto_symbol')
     predicted_price = data.get('predicted_price')
-    prediction_time = datetime.fromisoformat(data.get('prediction_time'))
+
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User not found. Please log in again.'}), 404
 
     actual_price = get_current_price(crypto_symbol)
 
@@ -57,13 +68,11 @@ def predict():
         crypto_symbol=crypto_symbol,
         predicted_price=predicted_price,
         actual_price=actual_price,
-        prediction_time=prediction_time,
+        prediction_time=datetime.utcnow(),
         points_earned=points
     )
 
-    user = User.query.get(user_id)
-    if user:
-        user.points += points
+    user.points += points
 
     db.session.add(prediction)
     db.session.commit()
@@ -71,7 +80,8 @@ def predict():
     return jsonify({
         'message': 'Prediction recorded',
         'actual_price': actual_price,
-        'points_earned': points
+        'points_earned': points,
+        'total_points': user.points
     }), 201
 
 
@@ -83,6 +93,50 @@ def leaderboard():
         'username': user.username,
         'points': user.points
     } for idx, user in enumerate(users)]), 200
+
+
+@main_bp.route('/api/quiz-data/<crypto_symbol>', methods=['GET'])
+@cross_origin()
+def quiz_data(crypto_symbol):
+    """Fetch recent hourly klines from Binance, hiding the last 6 hours.
+
+    Returns the visible candles (everything except the most recent 6h)
+    and the hidden actual close price (the close at the cutoff boundary).
+    """
+    try:
+        from .utils import binance_client
+        klines = binance_client.get_klines(
+            symbol=f"{crypto_symbol}USDT",
+            interval='1h',
+            limit=200
+        )
+
+        candles = []
+        for k in klines:
+            candles.append({
+                'timestamp': int(k[0]),
+                'open': float(k[1]),
+                'high': float(k[2]),
+                'low': float(k[3]),
+                'close': float(k[4]),
+                'volume': float(k[5]),
+            })
+
+        if len(candles) < 10:
+            return jsonify({'error': 'Not enough data from Binance'}), 500
+
+        hidden_count = 6
+        visible = candles[:-hidden_count]
+        cutoff_ts = visible[-1]['timestamp']
+
+        return jsonify({
+            'candles': visible,
+            'cutoff_timestamp': cutoff_ts,
+            'symbol': crypto_symbol,
+        }), 200
+    except Exception as e:
+        current_app.logger.error(f"quiz_data failed: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 @main_bp.route('/api/charts/<crypto_symbol>', methods=['GET'])

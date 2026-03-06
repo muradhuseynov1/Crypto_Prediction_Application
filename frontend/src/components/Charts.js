@@ -35,12 +35,24 @@ import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 
 const coinOptions = ['BTC', 'ETH', 'BNB', 'XRP', 'SOL'];
 
+function formatTs(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  if (isNaN(d)) return String(ts);
+  const mon = d.toLocaleString('en-US', { month: 'short' });
+  const day = d.getDate();
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${mon} ${day} ${hh}:${mm}`;
+}
+
 export default function Charts() {
   const [coin, setCoin] = useState('BTC');
   const [chartData, setChartData] = useState([]);
   const [macdData, setMacdData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [news, setNews] = useState([]);
+  const [newsLoaded, setNewsLoaded] = useState(false);
   const [newsIndex, setNewsIndex] = useState(0);
   const [marketOverview, setMarketOverview] = useState([]);
 
@@ -106,7 +118,10 @@ export default function Charts() {
       .then((res) => {
         if (isMounted) setNews(res.data.slice(0, 20));
       })
-      .catch(() => { });
+      .catch(() => { })
+      .finally(() => {
+        if (isMounted) setNewsLoaded(true);
+      });
 
     return () => {
       isMounted = false;
@@ -280,7 +295,12 @@ export default function Charts() {
                     <stop offset="90%" stopColor="#00E099" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <XAxis dataKey="timestamp" hide />
+                <XAxis
+                  dataKey="timestamp"
+                  tick={{ fill: '#7A8A99', fontSize: 11 }}
+                  tickFormatter={formatTs}
+                  interval="preserveStartEnd"
+                />
                 <YAxis
                   tickFormatter={(v) => v.toLocaleString()}
                   axisLine={false}
@@ -290,6 +310,7 @@ export default function Charts() {
                 <Tooltip
                   contentStyle={{ background: '#131A30', border: 'none' }}
                   labelStyle={{ color: '#E1E8F1' }}
+                  labelFormatter={formatTs}
                 />
                 <Area
                   type="monotone"
@@ -309,7 +330,12 @@ export default function Charts() {
             </Typography>
             <ResponsiveContainer width="100%" height="45%">
               <LineChart data={macdData}>
-                <XAxis dataKey="timestamp" hide />
+                <XAxis
+                  dataKey="timestamp"
+                  tick={{ fill: '#7A8A99', fontSize: 11 }}
+                  tickFormatter={formatTs}
+                  interval="preserveStartEnd"
+                />
                 <YAxis
                   axisLine={false}
                   tickLine={false}
@@ -319,6 +345,7 @@ export default function Charts() {
                 <Tooltip
                   contentStyle={{ background: '#131A30', border: 'none' }}
                   labelStyle={{ color: '#E1E8F1' }}
+                  labelFormatter={formatTs}
                 />
                 <Legend wrapperStyle={{ color: '#E1E8F1' }} />
                 <Line
@@ -345,11 +372,17 @@ export default function Charts() {
               <BarChart data={macdData}>
                 <Bar dataKey="histogram" fill="#FF66CC" />
                 <CartesianGrid strokeDasharray="4 4" stroke="#1F2A3D" />
-                <XAxis dataKey="timestamp" hide />
+                <XAxis
+                  dataKey="timestamp"
+                  tick={{ fill: '#7A8A99', fontSize: 11 }}
+                  tickFormatter={formatTs}
+                  interval="preserveStartEnd"
+                />
                 <YAxis axisLine={false} tickLine={false} />
                 <Tooltip
                   contentStyle={{ background: '#131A30', border: 'none' }}
                   labelStyle={{ color: '#E1E8F1' }}
+                  labelFormatter={formatTs}
                 />
               </BarChart>
             </ResponsiveContainer>
@@ -370,6 +403,7 @@ export default function Charts() {
                     flex: 2,
                     headerAlign: 'left',
                     align: 'left',
+                    renderCell: (params) => formatTs(params.value),
                   },
                   {
                     field: 'open',
@@ -513,8 +547,12 @@ export default function Charts() {
           <Typography variant="h5" gutterBottom>
             Latest Crypto News
           </Typography>
-          {visibleNews.length === 0 ? (
+          {!newsLoaded ? (
             <Typography color="textSecondary">Loading news…</Typography>
+          ) : visibleNews.length === 0 ? (
+            <Typography color="textSecondary">
+              No news available right now. NewsAPI quota may have been reached.
+            </Typography>
           ) : (
             <Grid container spacing={2} mb={4}>
               {visibleNews.map((item, idx) => (

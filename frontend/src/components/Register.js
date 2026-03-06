@@ -4,19 +4,20 @@ import {
 } from '@mui/material';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { saveUser, userExists } from '../utils/authStorage';
+import axios from 'axios';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 
 const Register = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
     const data = new FormData(e.currentTarget);
-    const email = data.get('email');
     const username = data.get('username');
     const password = data.get('password');
     const confirm = data.get('confirm');
@@ -31,15 +32,16 @@ const Register = () => {
       return;
     }
 
-    if (userExists(email, username)) {
-      setError('A user with this email or username already exists.');
-      return;
+    setLoading(true);
+    try {
+      const res = await axios.post('/api/register', { username, password });
+      login({ user_id: res.data.user_id, username: res.data.username });
+      navigate('/');
+    } catch (err) {
+      setError(err.response?.data?.error || 'Registration failed. Please try again.');
+    } finally {
+      setLoading(false);
     }
-
-    const newUser = { email, username, password };
-    saveUser(newUser);
-    login({ email, username });
-    navigate('/');
   };
 
   return (
@@ -81,12 +83,18 @@ const Register = () => {
 
         <form onSubmit={handleSubmit}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-            <TextField name="email" label="Email" type="email" required fullWidth />
             <TextField name="username" label="Username" required fullWidth />
             <TextField name="password" label="Password" type="password" required fullWidth />
             <TextField name="confirm" label="Confirm Password" type="password" required fullWidth />
-            <Button variant="contained" type="submit" size="large" fullWidth sx={{ mt: 1 }}>
-              Create Account
+            <Button
+              variant="contained"
+              type="submit"
+              size="large"
+              fullWidth
+              disabled={loading}
+              sx={{ mt: 1 }}
+            >
+              {loading ? 'Creating…' : 'Create Account'}
             </Button>
           </Box>
         </form>

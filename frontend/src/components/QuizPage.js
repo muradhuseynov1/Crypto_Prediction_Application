@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Box,
   Paper,
@@ -9,11 +9,11 @@ import {
   MenuItem,
   Grid,
   Alert,
-  TextField,
   Checkbox,
   FormControlLabel,
   Button,
   Snackbar,
+  Chip,
 } from '@mui/material';
 import {
   ResponsiveContainer,
@@ -30,113 +30,110 @@ import {
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import SportsEsportsIcon from '@mui/icons-material/SportsEsports';
+import LockIcon from '@mui/icons-material/Lock';
 
 const COLORS = {
   chart: '#00E099',
   cutoff: '#ef4444',
   prediction: '#3b82f6',
   average: '#facc15',
+  actual: '#f97316',
 };
+
+function formatTimestamp(ts) {
+  const d = new Date(ts);
+  const mon = d.toLocaleString('en-US', { month: 'short' });
+  const day = d.getDate();
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${mon} ${day} ${hh}:${mm}`;
+}
 
 export default function Quiz() {
   const chartRef = useRef(null);
   const { user } = useAuth();
-  const CHART_MARGIN = { top: 20, right: 20, bottom: 30, left: 50 };
+  const CHART_MARGIN = { top: 20, right: 30, bottom: 30, left: 60 };
 
   const [selectedCrypto, setSelectedCrypto] = useState('BTC');
   const [chartData, setChartData] = useState([]);
-  const [cutoffTimestamp, setCutoffTimestamp] = useState(new Date().toISOString());
+  const [cutoffTs, setCutoffTs] = useState(0);
   const [prediction, setPrediction] = useState(null);
   const [result, setResult] = useState(null);
   const [showAverage, setShowAverage] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [locked, setLocked] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
+  const [loading, setLoading] = useState(false);
 
-  const initialCutoff = useMemo(() => {
-    if (!chartData.length) return new Date().toISOString();
-    const a = chartData[0].timestamp;
-    const b = chartData[chartData.length - 1].timestamp;
-    return new Date(a + (b - a) * 0.6).toISOString();
-  }, [chartData]);
-
-  useEffect(() => {
-    if (chartData.length) {
-      setCutoffTimestamp(initialCutoff);
-      setPrediction(null);
-      setResult(null);
+  const fetchQuizData = useCallback(async (symbol) => {
+    setLoading(true);
+    setPrediction(null);
+    setResult(null);
+    setLocked(false);
+    try {
+      const resp = await axios.get(`/api/quiz-data/${symbol}`);
+      const { candles, cutoff_timestamp } = resp.data;
+      const mapped = candles.map((c) => ({
+        timestamp: c.timestamp,
+        close: c.close,
+        volume: c.volume,
+      }));
+      setChartData(mapped);
+      setCutoffTs(cutoff_timestamp);
+    } catch {
+      setChartData([]);
+      setSnackbar({ open: true, message: 'Failed to load quiz data. Check your API keys.', severity: 'error' });
+    } finally {
+      setLoading(false);
     }
-  }, [initialCutoff, chartData]);
+  }, []);
 
   useEffect(() => {
-    axios
-      .get(`/api/charts/${selectedCrypto}`)
-      .then((resp) => {
-        let data = resp.data;
-        if (typeof data === 'string') {
-          const clean = data.replace(/\bNaN\b/g, 'null');
-          data = JSON.parse(clean);
-        }
-        setChartData(
-          (data.historical_data || []).map((r) => ({
-            ...r,
-            timestamp: new Date(r.timestamp).getTime(),
-          }))
-        );
-      })
-      .catch(() => setChartData([]));
-  }, [selectedCrypto]);
-
-  const cutoffTimeNum = new Date(cutoffTimestamp).getTime();
-
-  const displayedData = useMemo(
-    () =>
-      chartData.map((d) =>
-        d.timestamp > cutoffTimeNum ? { ...d, close: null } : d
-      ),
-    [chartData, cutoffTimeNum]
-  );
+    fetchQuizData(selectedCrypto);
+  }, [selectedCrypto, fetchQuizData]);
 
   const [yMin, yMax] = useMemo(() => {
     if (!chartData.length) return [0, 1];
     const vals = chartData.map((d) => d.close);
-    return [Math.min(...vals), Math.max(...vals)];
+    const lo = Math.min(...vals);
+    const hi = Math.max(...vals);
+    const pad = (hi - lo) * 0.1;
+    return [lo - pad, hi + pad];
   }, [chartData]);
 
   const xDomain = useMemo(() => {
-    if (!chartData.length) return ['auto', 'auto'];
+    if (!chartData.length) return [0, 1];
     const start = chartData[0].timestamp;
-    return [start, cutoffTimeNum + 3600_000];
-  }, [chartData, cutoffTimeNum]);
+    const end = chartData[chartData.length - 1].timestamp;
+    const span = end - start;
+    return [start, end + span * 0.15];
+  }, [chartData]);
 
   const averagePrice = useMemo(() => {
-    if (!showAverage) return null;
-    const valid = chartData.filter((d) => d.timestamp <= cutoffTimeNum);
-    if (!valid.length) return null;
-    return valid.reduce((sum, d) => sum + d.close, 0) / valid.length;
-  }, [chartData, cutoffTimeNum, showAverage]);
-
-  const resetChart = () => {
-    setPrediction(null);
-    setResult(null);
-    setCutoffTimestamp(initialCutoff);
-  };
+    if (!showAverage || !chartData.length) return null;
+    return chartData.reduce((sum, d) => sum + d.close, 0) / chartData.length;
+  }, [chartData, showAverage]);
 
   const handleWrapperClick = (e) => {
-    const { offsetX, offsetY } = e.nativeEvent;
+    if (locked) return;
+
     const rect = e.currentTarget.getBoundingClientRect();
+    const offsetX = e.clientX - rect.left;
+    const offsetY = e.clientY - rect.top;
     const plotW = rect.width - CHART_MARGIN.left - CHART_MARGIN.right;
     const plotH = rect.height - CHART_MARGIN.top - CHART_MARGIN.bottom;
+
     if (
       offsetX < CHART_MARGIN.left ||
       offsetX > CHART_MARGIN.left + plotW ||
       offsetY < CHART_MARGIN.top ||
       offsetY > CHART_MARGIN.top + plotH
-    )
-      return;
+    ) return;
 
     const [xMin, xMax] = xDomain;
     const ts = xMin + ((offsetX - CHART_MARGIN.left) / plotW) * (xMax - xMin);
-    if (ts <= cutoffTimeNum) return;
+
+    if (ts <= cutoffTs) return;
 
     const price = yMax - ((offsetY - CHART_MARGIN.top) / plotH) * (yMax - yMin);
     setPrediction({ timestamp: ts, price });
@@ -149,21 +146,21 @@ export default function Quiz() {
     setSubmitting(true);
     try {
       const res = await axios.post('/api/predict', {
-        user_id: user.user_id || 1,
+        user_id: user.user_id,
         crypto_symbol: selectedCrypto,
         predicted_price: prediction.price,
-        prediction_time: new Date(prediction.timestamp).toISOString(),
       });
       setResult(res.data);
+      setLocked(true);
       setSnackbar({
         open: true,
-        message: `Prediction submitted! You earned ${res.data.points_earned} points.`,
+        message: `You earned ${res.data.points_earned} points! Total: ${res.data.total_points}`,
         severity: res.data.points_earned > 50 ? 'success' : 'warning',
       });
     } catch (err) {
       setSnackbar({
         open: true,
-        message: err.response?.data?.error || 'Failed to submit prediction. Please try again.',
+        message: err.response?.data?.error || 'Failed to submit prediction.',
         severity: 'error',
       });
     } finally {
@@ -171,11 +168,13 @@ export default function Quiz() {
     }
   };
 
-  const CustomTooltip = ({ active, payload, label }) => {
-    if (!active) return null;
-    const val = payload?.[0]?.value;
-    if (typeof val !== 'number' || label <= cutoffTimeNum) return null;
+  const handleNewRound = () => {
+    fetchQuizData(selectedCrypto);
+  };
 
+  const CustomTooltip = ({ active, payload }) => {
+    if (!active || !payload?.[0]) return null;
+    const point = payload[0].payload;
     return (
       <Box
         sx={{
@@ -187,10 +186,10 @@ export default function Quiz() {
         }}
       >
         <Typography variant="caption" color="text.secondary">
-          {new Date(label).toLocaleString()}
+          {formatTimestamp(point.timestamp)}
         </Typography>
         <Typography variant="body2" fontWeight="bold" color="primary.main">
-          Close: ${val.toFixed(2)}
+          Close: ${point.close?.toFixed(2)}
         </Typography>
       </Box>
     );
@@ -205,8 +204,8 @@ export default function Quiz() {
         </Typography>
       </Box>
       <Typography variant="body2" color="text.secondary" gutterBottom>
-        Select a cryptocurrency, set your cutoff, then click on the right side
-        of the chart to predict its future price.
+        The chart shows recent price history with the last 6 hours hidden.
+        Click to the right of the red cutoff line to predict where the price is now.
       </Typography>
 
       {/* Controls */}
@@ -218,6 +217,7 @@ export default function Quiz() {
               value={selectedCrypto}
               onChange={(e) => setSelectedCrypto(e.target.value)}
               label="Crypto"
+              disabled={locked}
             >
               {['BTC', 'ETH', 'BNB', 'XRP', 'SOL'].map((sym) => (
                 <MenuItem key={sym} value={sym}>
@@ -228,21 +228,7 @@ export default function Quiz() {
           </FormControl>
         </Grid>
 
-        <Grid item xs={12} sm={4}>
-          <TextField
-            label="Cutoff Time"
-            type="datetime-local"
-            fullWidth
-            value={cutoffTimestamp.slice(0, 16)}
-            onChange={(e) => {
-              const d = new Date(e.target.value);
-              if (!isNaN(d)) setCutoffTimestamp(d.toISOString());
-            }}
-            InputLabelProps={{ shrink: true }}
-          />
-        </Grid>
-
-        <Grid item xs={12} sm={4} alignItems="center" display="flex">
+        <Grid item xs={12} sm={4} display="flex" alignItems="center">
           <FormControlLabel
             control={
               <Checkbox
@@ -259,18 +245,58 @@ export default function Quiz() {
             }
           />
         </Grid>
+
+        <Grid item xs={12} sm={4} display="flex" alignItems="center" justifyContent="flex-end">
+          {cutoffTs > 0 && (
+            <Chip
+              label={`Data up to: ${formatTimestamp(cutoffTs)}`}
+              variant="outlined"
+              sx={{ color: 'text.secondary', borderColor: COLORS.cutoff }}
+            />
+          )}
+        </Grid>
       </Grid>
 
       {/* Chart */}
-      <Paper sx={{ p: 2, mb: 3, height: 500 }} elevation={4}>
+      <Paper sx={{ p: 2, mb: 3, height: 500, position: 'relative' }} elevation={4}>
+        {locked && (
+          <Box
+            sx={{
+              position: 'absolute',
+              top: 8,
+              right: 8,
+              zIndex: 10,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.5,
+              px: 1.5,
+              py: 0.5,
+              borderRadius: 1,
+              bgcolor: 'rgba(239,68,68,0.15)',
+              border: '1px solid rgba(239,68,68,0.3)',
+            }}
+          >
+            <LockIcon sx={{ fontSize: 16, color: COLORS.cutoff }} />
+            <Typography variant="caption" color={COLORS.cutoff} fontWeight={600}>
+              LOCKED — Click "New Round" to play again
+            </Typography>
+          </Box>
+        )}
+
         <Box
-          sx={{ width: '100%', height: '100%', cursor: 'crosshair' }}
+          sx={{
+            width: '100%',
+            height: '100%',
+            cursor: locked ? 'not-allowed' : 'crosshair',
+            opacity: loading ? 0.4 : 1,
+            transition: 'opacity 0.3s',
+          }}
           onClick={handleWrapperClick}
         >
           <ResponsiveContainer>
             <LineChart
               ref={chartRef}
-              data={displayedData}
+              data={chartData}
               margin={CHART_MARGIN}
             >
               <CartesianGrid stroke="#1F2A3D" />
@@ -279,11 +305,13 @@ export default function Quiz() {
                 domain={xDomain}
                 type="number"
                 scale="time"
-                tick={{ fill: '#7A8A99' }}
+                tick={{ fill: '#7A8A99', fontSize: 11 }}
+                tickFormatter={formatTimestamp}
               />
               <YAxis
                 domain={[yMin, yMax]}
-                tick={{ fill: '#7A8A99' }}
+                tick={{ fill: '#7A8A99', fontSize: 11 }}
+                tickFormatter={(v) => `$${v.toLocaleString()}`}
               />
               <Tooltip content={<CustomTooltip />} cursor={false} />
               <Legend wrapperStyle={{ color: '#E1E8F1' }} />
@@ -292,16 +320,18 @@ export default function Quiz() {
                 dataKey="close"
                 stroke={COLORS.chart}
                 dot={false}
-                connectNulls
+                name="Price"
+                strokeWidth={2}
               />
               <ReferenceLine
-                x={cutoffTimeNum}
+                x={cutoffTs}
                 stroke={COLORS.cutoff}
                 strokeDasharray="5 5"
                 label={{
                   position: 'top',
-                  value: 'Cutoff',
-                  fill: '#E1E8F1',
+                  value: 'Hidden →',
+                  fill: COLORS.cutoff,
+                  fontSize: 12,
                 }}
               />
               {showAverage && averagePrice != null && (
@@ -331,6 +361,20 @@ export default function Quiz() {
                   }}
                 />
               )}
+              {result && (
+                <ReferenceLine
+                  y={result.actual_price}
+                  stroke={COLORS.actual}
+                  strokeDasharray="6 3"
+                  strokeWidth={2}
+                  label={{
+                    position: 'right',
+                    value: `Actual $${result.actual_price.toFixed(2)}`,
+                    fill: COLORS.actual,
+                    fontWeight: 700,
+                  }}
+                />
+              )}
             </LineChart>
           </ResponsiveContainer>
         </Box>
@@ -353,14 +397,14 @@ export default function Quiz() {
           }}
         >
           <Typography color="text.primary" sx={{ flex: 1 }}>
-            {prediction
-              ? `Your Prediction: $${prediction.price.toFixed(2)} at ${new Date(
-                prediction.timestamp
-              ).toLocaleString()}`
-              : 'Click on the chart (to the right of the cutoff line) to place your prediction.'}
+            {locked
+              ? `Round complete! You predicted $${prediction?.price.toFixed(2)} — actual was $${result?.actual_price?.toFixed(2)}`
+              : prediction
+                ? `Your Prediction: $${prediction.price.toFixed(2)}`
+                : 'Click on the chart (to the right of the red cutoff line) to predict the current price.'}
           </Typography>
           <Box sx={{ display: 'flex', gap: 1 }}>
-            {prediction && user && !result && (
+            {prediction && user && !locked && (
               <Button
                 variant="contained"
                 onClick={handleSubmitPrediction}
@@ -369,9 +413,23 @@ export default function Quiz() {
                 {submitting ? 'Submitting…' : 'Submit Prediction'}
               </Button>
             )}
-            <Button variant="outlined" onClick={resetChart}>
-              Reset
-            </Button>
+            {locked && (
+              <Button
+                variant="contained"
+                color="secondary"
+                onClick={handleNewRound}
+              >
+                New Round
+              </Button>
+            )}
+            {!locked && prediction && (
+              <Button
+                variant="outlined"
+                onClick={() => { setPrediction(null); setResult(null); }}
+              >
+                Clear
+              </Button>
+            )}
           </Box>
         </Box>
 
@@ -382,11 +440,16 @@ export default function Quiz() {
               sx={{ borderRadius: 2 }}
             >
               <Typography variant="body1">
-                <strong>Actual Price:</strong> $
-                {result.actual_price?.toFixed(2)}
+                <strong>Your Prediction:</strong> ${prediction?.price.toFixed(2)}
+              </Typography>
+              <Typography variant="body1">
+                <strong>Actual Price:</strong> ${result.actual_price?.toFixed(2)}
               </Typography>
               <Typography variant="body1">
                 <strong>Points Earned:</strong> {result.points_earned} / 100
+              </Typography>
+              <Typography variant="body1">
+                <strong>Total Points:</strong> {result.total_points}
               </Typography>
             </Alert>
           </Box>

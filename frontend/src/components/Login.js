@@ -4,33 +4,33 @@ import {
 } from '@mui/material';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { getUsers } from '../utils/authStorage';
+import axios from 'axios';
 import LoginIcon from '@mui/icons-material/Login';
 
 const Login = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setLoading(true);
+
     const data = new FormData(e.currentTarget);
-    const email = data.get('email');
+    const username = data.get('username');
     const password = data.get('password');
 
-    const users = getUsers();
-    const matchedUser = users.find(
-      (user) => user.email === email && user.password === password
-    );
-
-    if (!matchedUser) {
-      setError('Invalid credentials. Please check your email and password.');
-      return;
+    try {
+      const res = await axios.post('/api/login', { username, password });
+      login({ user_id: res.data.user_id, username: res.data.username });
+      navigate('/');
+    } catch (err) {
+      setError(err.response?.data?.error || 'Login failed. Please try again.');
+    } finally {
+      setLoading(false);
     }
-
-    login({ email, username: matchedUser.username });
-    navigate('/');
   };
 
   return (
@@ -72,10 +72,17 @@ const Login = () => {
 
         <form onSubmit={handleSubmit}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-            <TextField name="email" label="Email" type="email" required fullWidth />
+            <TextField name="username" label="Username" required fullWidth />
             <TextField name="password" label="Password" type="password" required fullWidth />
-            <Button variant="contained" type="submit" size="large" fullWidth sx={{ mt: 1 }}>
-              Sign In
+            <Button
+              variant="contained"
+              type="submit"
+              size="large"
+              fullWidth
+              disabled={loading}
+              sx={{ mt: 1 }}
+            >
+              {loading ? 'Signing in…' : 'Sign In'}
             </Button>
           </Box>
         </form>
